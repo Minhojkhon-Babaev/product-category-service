@@ -1,0 +1,48 @@
+groups:
+  - name: product-category-service
+    rules:
+      - alert: ProductApiDown
+        expr: up{job="product-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Product category API is unavailable
+
+      - alert: TritonDown
+        expr: up{job="triton"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Triton inference server is unavailable
+
+      - alert: HighPredictionErrorRate
+        expr: >-
+          sum(rate(product_api_requests_total{status="error"}[5m]))
+          / clamp_min(sum(rate(product_api_requests_total[5m])), 0.001) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prediction error rate exceeds 5%
+
+      - alert: HighPredictionLatency
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum(rate(product_api_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prediction p95 latency exceeds one second
+
+      - alert: ProductDataDrift
+        expr: product_drift_detected == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Data drift detected for {{ $labels.feature }}

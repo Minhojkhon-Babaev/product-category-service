@@ -1,0 +1,15 @@
+.DS_Store
+.coverage
+.env
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.py[cod]
+*.joblib
+*.onnx
+coverage.xml
+htmlcov/
+model_repository/product_category/1/*
+!model_repository/product_category/1/.gitkeep
+runtime-data/

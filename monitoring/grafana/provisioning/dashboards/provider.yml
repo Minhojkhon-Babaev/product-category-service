@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: Product category dashboards
+    folder: Product Category
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

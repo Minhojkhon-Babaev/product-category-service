@@ -1,0 +1,159 @@
+services:
+  artifact-init:
+    build: .
+    image: product-category-api:local
+    pull_policy: build
+    user: root
+    command:
+      - python
+      - scripts/artifacts.py
+      - download
+      - --directory
+      - /artifacts
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-https://minio.v-efimov.tech}
+      S3_BUCKET: ${S3_BUCKET:-m.babaev}
+      S3_PREFIX: ${S3_PREFIX:-project/artifacts/v1}
+    volumes:
+      - model-artifacts:/artifacts
+    restart: "no"
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  triton:
+    image: ${TRITON_IMAGE:-jackiexiao/tritonserver:22.06-onnx-py-cpu}
+    platform: ${TRITON_PLATFORM:-linux/amd64}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - >-
+        mkdir -p /runtime-models/product_category/1 &&
+        cp /repository/product_category/config.pbtxt /runtime-models/product_category/config.pbtxt &&
+        cp /artifacts/model.onnx /runtime-models/product_category/1/model.onnx &&
+        exec tritonserver --model-repository=/runtime-models
+        --strict-model-config=true
+    depends_on:
+      artifact-init:
+        condition: service_completed_successfully
+    volumes:
+      - model-artifacts:/artifacts:ro
+      - ./model_repository:/repository:ro
+    ports:
+      - "127.0.0.1:${TRITON_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/v2/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    build: .
+    image: product-category-api:local
+    pull_policy: build
+    environment:  
+      REDIS_URL: redis://redis:6379/0
+      TRITON_URL: triton:8000
+      VECTORIZER_PATH: /artifacts/vectorizer.joblib
+      METADATA_PATH: /artifacts/metadata.json
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
+    depends_on:
+      artifact-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      triton:
+        condition: service_healthy
+    volumes:
+      - model-artifacts:/artifacts:ro
+    ports:
+      - "${SERVICE_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  drift-monitor:
+    image: product-category-api:local
+    pull_policy: never
+    command: ["python", "-m", "drift_monitor.main"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REFERENCE_STATS_PATH: /artifacts/reference_stats.json
+      DRIFT_INTERVAL_SECONDS: ${DRIFT_INTERVAL_SECONDS:-60}
+      DRIFT_MIN_SAMPLES: ${DRIFT_MIN_SAMPLES:-20}
+    depends_on:
+      artifact-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    volumes:
+      - model-artifacts:/artifacts:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - api
+      - drift-monitor
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  model-artifacts:
+  redis-data:
+  prometheus-data:
+  grafana-data:

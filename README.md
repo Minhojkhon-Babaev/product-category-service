@@ -1,93 +1,239 @@
-# m.babaev
+# Product Category Classifier
 
+Production ML-сервис определяет категорию e-commerce товара по названию, описанию,
+модели, типу и производителю. Классификатор обучен на данных соревнования
+**Production ML Spring 2026**.
 
+- Kaggle public score: **0.32413**
+- Kaggle private score: **0.36728**
+- Презентация: [Project Defence](https://docs.google.com/presentation/d/1Tapw_uacrWMlNldgvvJnCn6y3X_nd4pmEG0HqOkRsAY/edit?usp=sharing)
 
-## Getting started
+## Быстрый запуск
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.v-efimov.tech/production-ml-spring-2026/projects/m.babaev.git
-git branch -M master
-git push -uf origin master
+```bash
+SERVICE_PORT=8088 ./run_service.sh
 ```
 
-## Integrate with your tools
+Скрипт скачивает артефакты из MinIO, собирает API и запускает Redis, Nvidia
+Triton, API, drift monitor, Prometheus, Alertmanager и Grafana. Затем он ждёт
+готовности сервиса.
 
-* [Set up project integrations](https://gitlab.v-efimov.tech/production-ml-spring-2026/projects/m.babaev/-/settings/integrations)
+Тестовый запрос:
 
-## Collaborate with your team
+```bash
+curl -X POST http://localhost:8088/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://ormatek.com/catalog/krovati/product/krovat-como-veda-4/",
+    "texts": {
+      "name": "Мягкая Кровать Орматек Como Veda 4 140x190",
+      "description": "Мягкая кровать с каретной пиковкой в изголовье",
+      "model": "Кровать Como Veda 4",
+      "type_prefix": "Кровать",
+      "vendor": "Орматек"
+    },
+    "image_url": "http://d.mradx.net/ecomimg/example.jpeg"
+  }'
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Ответ:
 
-## Test and Deploy
+```json
+{"category_ind": 42}
+```
 
-Use the built-in continuous integration in GitLab.
+Допускаются пустые или `null` текстовые поля. Поле `texts` обязательно.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```bash
+./stop_service.sh
+```
 
-***
 
-# Editing this README
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Архитектура
 
-## Suggestions for a good README
+```mermaid
+flowchart LR
+    Client[HTTP client] -->|POST /predict| API[FastAPI]
+    API -->|GET/SETEX| Redis[(Redis cache)]
+    API -->|TF-IDF tensor| Triton[Nvidia Triton<br/>ONNX Runtime CPU]
+    Triton -->|category_ind| API
+    API -->|prediction events| Redis
+    Drift[Periodic drift monitor] -->|read window| Redis
+    API -->|metrics| Prometheus[(Prometheus)]
+    Drift -->|PSI + JS| Prometheus
+    Triton -->|inference metrics| Prometheus
+    Prometheus --> Grafana[Grafana dashboard]
+    Prometheus --> Alertmanager[Alertmanager]
+    MinIO[(MinIO S3)] -->|artifacts| Init[Artifact init]
+    Init --> Triton
+    Init --> API
+    Init --> Drift
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
-## Name
-Choose a self-explaining name for your project.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+- **FastAPI** — валидация контракта, подготовка текста и HTTP API.
+- **Nvidia Triton** — CPU-инференс Logistic Regression в ONNX Runtime.
+- **Redis** — кэш запросов с TTL и буфер событий для мониторинга.
+- **Drift monitor** — периодический PSI длины текста и Jensen–Shannon distance
+распределения предсказанных классов.
+- **Prometheus/Grafana/Alertmanager** — метрики, dashboard и алерты.
+- **MinIO** — внешнее хранение тяжёлых артефактов.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## HTTP API
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### `POST /predict`
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- `url: string` — URL карточки товара;
+- `texts: object` — `name`, `description`, `model`, `type_prefix`, `vendor`;
+- `image_url: string` — URL изображения.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Выход: `{"category_ind": integer}`.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### `GET /health`
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Возвращает готовность Redis и Triton. `status=ok` означает готовность обеих
+зависимостей.
 
-## License
-For open source projects, say how it is licensed.
+### `GET /metrics`
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Prometheus-метрики API. OpenAPI доступен на `/docs`.
+
+## Модель и данные
+
+Модель использует объединение полей:
+
+```text
+type_prefix vendor name model description
+```
+
+Это `TfidfVectorizer` (80 000 word unigram/bigram features) и многоклассовая
+`LogisticRegression`. В API выполняется TF-IDF, а классификатор исполняется
+Triton. Модель распознаёт 207 присутствующих в train классов.
+
+Артефакты:
+
+```text
+s3://m.babaev/project/artifacts/v1/
+├── model.onnx
+├── vectorizer.joblib
+├── metadata.json
+└── reference_stats.json
+```
+
+Обучение и формирование Kaggle submission:
+
+```bash
+uv run python scripts/train.py \
+  --train-data /path/to/train.parquet.snappy \
+  --test-data /path/to/test.parquet.snappy \
+  --output training-output
+```
+
+Конвертация воспроизводима:
+
+```bash
+uv sync
+uv run python scripts/convert_to_onnx.py \
+  --pipeline /path/to/model.pkl \
+  --train-data /path/to/train.parquet.snappy \
+  --output artifacts
+```
+
+Загрузка новой версии:
+
+```bash
+uv run python scripts/artifacts.py upload \
+  --directory artifacts --bucket m.babaev --prefix project/artifacts/v1
+```
+
+
+
+## Мониторинг
+
+После запуска:
+
+- Grafana: [http://localhost:3000](http://localhost:3000), по умолчанию `admin/admin`;
+- Prometheus: [http://localhost:9090](http://localhost:9090);
+- Alertmanager: [http://localhost:9093](http://localhost:9093);
+- Triton health: [http://localhost:8001/v2/health/ready](http://localhost:8001/v2/health/ready).
+
+Основные метрики:
+
+- `product_api_requests_total`;
+- `product_api_request_duration_seconds`;
+- `product_api_cache_operations_total`;
+- `product_api_predictions_total`;
+- `product_drift_score`;
+- `product_drift_detected`;
+- стандартные метрики Triton `nv_inference_*`.
+
+Drift рассчитывается раз в 60 секунд по последним 1000 некэшированным запросам,
+когда накоплено минимум 20 наблюдений. Порог PSI и Jensen–Shannon — `0.2`.
+
+Алерты: недоступность API/Triton, доля ошибок выше 5%, p95 latency выше секунды
+и обнаруженный drift.
+
+## Конфигурация
+
+
+| Переменная               | По умолчанию                   | Назначение                  |
+| ------------------------ | ------------------------------ | --------------------------- |
+| `SERVICE_PORT`           | `8000`                         | внешний порт API            |
+| `AWS_ACCESS_KEY_ID`      | —                              | ключ MinIO/S3               |
+| `AWS_SECRET_ACCESS_KEY`  | —                              | секрет MinIO/S3             |
+| `S3_ENDPOINT_URL`        | `https://minio.v-efimov.tech`  | S3 API                      |
+| `S3_BUCKET`              | `m.babaev`                     | бакет                       |
+| `S3_PREFIX`              | `project/artifacts/v1`         | версия артефактов           |
+| `CACHE_TTL_SECONDS`      | `3600`                         | TTL предсказания            |
+| `DRIFT_INTERVAL_SECONDS` | `60`                           | период drift-процесса       |
+| `DRIFT_MIN_SAMPLES`      | `20`                           | минимальная выборка         |
+| `TRITON_IMAGE`           | compact CPU ONNX image `22.06` | образ Triton                |
+| `TRITON_PLATFORM`        | `linux/amd64`                  | платформа Triton            |
+| `TRITON_PORT`            | `8001`                         | локальный порт Triton       |
+| `PROMETHEUS_PORT`        | `9090`                         | локальный порт Prometheus   |
+| `ALERTMANAGER_PORT`      | `9093`                         | локальный порт Alertmanager |
+| `GRAFANA_PORT`           | `3000`                         | локальный порт Grafana      |
+
+
+Наружу открыт только `SERVICE_PORT`. Порты мониторинга слушают `127.0.0.1` и
+переопределяются, если они уже заняты другим стеком:
+
+```bash
+SERVICE_PORT=8000 GRAFANA_PORT=3001 PROMETHEUS_PORT=9091 ./run_service.sh
+```
+
+Официальный образ можно выбрать так:
+
+```bash
+TRITON_IMAGE=nvcr.io/nvidia/tritonserver:25.05-py3 ./run_service.sh
+```
+
+
+
+## Разработка и CI/CD
+
+```bash
+uv sync
+uv run ruff check .
+uv run pytest
+docker build -t product-category-api .
+AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x docker-compose config
+```
+
+Тесты покрывают контракт, preprocessing, кэш, ошибки, Triton-клиент и
+drift-метрики. Минимальное покрытие — 90%. GitLab CI запускает lint, тесты с
+Cobertura-отчётом, сборку Docker-образа и проверку Compose.
+
+## План развития
+
+1. Добавить char-level TF-IDF и distillation более сильной модели.
+2. Использовать изображение через CLIP и ансамбль текста/изображения.
+3. Возвращать top-k категорий с калиброванным confidence.
+4. Добавить feedback loop и автоматическое переобучение.
+

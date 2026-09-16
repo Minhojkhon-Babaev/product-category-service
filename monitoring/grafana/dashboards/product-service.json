@@ -1,0 +1,124 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "API status",
+      "gridPos": {"h": 6, "w": 4, "x": 0, "y": 0},
+      "targets": [{"expr": "up{job=\"product-api\"}", "legendFormat": "API"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{"type": "value", "options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}}],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Triton status",
+      "gridPos": {"h": 6, "w": 4, "x": 4, "y": 0},
+      "targets": [{"expr": "up{job=\"triton\"}", "legendFormat": "Triton"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{"type": "value", "options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}}],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Requests / sec",
+      "gridPos": {"h": 6, "w": 4, "x": 8, "y": 0},
+      "targets": [{"expr": "sum(rate(product_api_requests_total[5m]))", "legendFormat": "RPS"}],
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Cache hit ratio",
+      "gridPos": {"h": 6, "w": 4, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "sum(rate(product_api_cache_operations_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(product_api_cache_operations_total[5m])), 0.001)",
+          "legendFormat": "hit ratio"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "p95 latency",
+      "gridPos": {"h": 6, "w": 4, "x": 16, "y": 0},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(product_api_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Drift samples",
+      "gridPos": {"h": 6, "w": 4, "x": 20, "y": 0},
+      "targets": [{"expr": "product_drift_sample_size", "legendFormat": "events"}],
+      "fieldConfig": {"defaults": {}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate by status",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "targets": [
+        {
+          "expr": "sum(rate(product_api_requests_total[1m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Data / concept drift scores",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "targets": [
+        {
+          "expr": "product_drift_score",
+          "legendFormat": "{{feature}} ({{method}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 0.2}]}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Top predicted categories",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 14},
+      "targets": [
+        {
+          "expr": "topk(15, sum(increase(product_api_predictions_total[1h])) by (category_ind))",
+          "legendFormat": "category {{category_ind}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {}, "overrides": []}
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["ml", "triton", "drift"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Product Category Service",
+  "uid": "product-category-service",
+  "version": 1
+}
