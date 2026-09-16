@@ -28,23 +28,20 @@ test:
 
 docker-build:
   stage: build
-  image: docker:27-cli
-  services:
-    - docker:27-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
   script:
-    - docker build -t product-category-api:$CI_COMMIT_SHA .
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination "product-category-api:${CI_COMMIT_SHA}"
+      --no-push
 
 compose-config:
   stage: build
   image: docker:27-cli
-  services:
-    - docker:27-dind
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
     AWS_ACCESS_KEY_ID: ci-placeholder
     AWS_SECRET_ACCESS_KEY: ci-placeholder
   before_script:
