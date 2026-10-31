@@ -2,7 +2,7 @@
 
 Презентация: https://docs.google.com/presentation/d/1vJHVpzisIZw005Tedt9xLe-_SKw8X5LinBk3auJIfIE/edit
 
-8 слайдов. Плановый тайминг — 6 минут 30 секунд с паузами и переходами.
+8 слайдов.
 
 ## Слайд 1. Что делает сервис — 40 секунд
 

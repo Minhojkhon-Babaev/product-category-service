@@ -6,15 +6,10 @@ Production ML-сервис определяет категорию e-commerce т
 
 - Kaggle public score: **0.32413**
 - Kaggle private score: **0.36728**
-- Новая презентация на 5–7 минут: [Project Defence](https://docs.google.com/presentation/d/1vJHVpzisIZw005Tedt9xLe-_SKw8X5LinBk3auJIfIE/edit)
+- Презентация: [Project Defence](https://docs.google.com/presentation/d/1vJHVpzisIZw005Tedt9xLe-_SKw8X5LinBk3auJIfIE/edit)
 
 - [Текст выступления и ответы на вопросы](docs/defence-speech.md)
-- [Проверка проекта при переносе](docs/validation.md)
 - Оригинал проекта: [GitLab](https://gitlab.v-efimov.tech/production-ml-spring-2026/projects/m.babaev)
-
-Оценки Kaggle приведены из материалов проекта; точное название соревновательной
-метрики в репозитории не зафиксировано. Эти значения нельзя интерпретировать как
-процент верных ответов. Измеренного сравнения скорости до/после оптимизации нет.
 
 ## Быстрый запуск
 
