@@ -6,7 +6,15 @@ Production ML-сервис определяет категорию e-commerce т
 
 - Kaggle public score: **0.32413**
 - Kaggle private score: **0.36728**
-- Презентация: [Project Defence](https://docs.google.com/presentation/d/1Tapw_uacrWMlNldgvvJnCn6y3X_nd4pmEG0HqOkRsAY/edit?usp=sharing)
+- Новая презентация на 5–7 минут: [Project Defence](https://docs.google.com/presentation/d/1vJHVpzisIZw005Tedt9xLe-_SKw8X5LinBk3auJIfIE/edit)
+
+- [Текст выступления и ответы на вопросы](docs/defence-speech.md)
+- [Проверка проекта при переносе](docs/validation.md)
+- Оригинал проекта: [GitLab](https://gitlab.v-efimov.tech/production-ml-spring-2026/projects/m.babaev)
+
+Оценки Kaggle приведены из материалов проекта; точное название соревновательной
+метрики в репозитории не зафиксировано. Эти значения нельзя интерпретировать как
+процент верных ответов. Измеренного сравнения скорости до/после оптимизации нет.
 
 ## Быстрый запуск
 
@@ -227,7 +235,10 @@ AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x docker-compose config
 ```
 
 Тесты покрывают контракт, preprocessing, кэш, ошибки, Triton-клиент и
-drift-метрики. Минимальное покрытие — 90%. GitLab CI запускает lint, тесты с
+drift-метрики. Минимальное покрытие — 90%. При переносе: 25 тестов прошли, покрытие 93,94%.
+Шаблон GitHub Actions находится в [docs/ci/github-actions.yml](docs/ci/github-actions.yml);
+он подготовлен, но не активирован из-за отсутствия разрешения `workflow` у текущего
+GitHub-токена. Исходный GitLab CI запускает lint, тесты с
 Cobertura-отчётом, сборку Docker-образа и проверку Compose.
 
 ## План развития
